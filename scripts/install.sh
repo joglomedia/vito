@@ -89,7 +89,6 @@ function vitodeploy_input() {
 
   export V_USE_CUSTOM_DOMAIN
   export V_CUSTOM_DOMAIN
-  export V_APP_URL
 
   if [[ "${V_APP_ENV}" == prod* ]]; then
     while [[ "${V_USE_CUSTOM_DOMAIN}" != y* && "${V_USE_CUSTOM_DOMAIN}" != Y* && \
@@ -108,15 +107,8 @@ function vitodeploy_input() {
       do
         read -rp "Do you wish to enable HTTPS for your domain? [y/n]: " -e V_USE_HTTPS_DOMAIN
       done
-
-      if [[ "${V_USE_HTTPS_DOMAIN}" == y* || "${V_USE_HTTPS_DOMAIN}" == Y* ]]; then
-        V_APP_URL="https://${V_CUSTOM_DOMAIN}"
-      else
-        V_APP_URL="http://${V_CUSTOM_DOMAIN}"
-      fi
     else
       V_CUSTOM_DOMAIN="${V_SERVER_IP_PUBLIC}"
-      V_APP_URL="http://${V_CUSTOM_DOMAIN}"
     fi
 
     if [[ $(validate_domain_name "${V_CUSTOM_DOMAIN}") == true ]]; then
@@ -154,7 +146,6 @@ function vitodeploy_input() {
     fi
   else
     V_CUSTOM_DOMAIN="localhost"
-    V_APP_URL="http://${V_CUSTOM_DOMAIN}"
   fi
 
   return 0
@@ -330,9 +321,9 @@ function create_swap() {
 
 # Upgrading OS & install prerequisites
 function install_prerequisites() {
-  # Create swap space for machine with low RAM
   echo -e "\nUpgrading OS and install prerequisites"
 
+  # Create swap space for machine with low RAM
   echo "Detecting available swap space"
   if free | awk '/^Swap:/ {exit !$2}'; then
     local SWAP_SIZE && SWAP_SIZE=$(free -m | awk '/^Swap:/ { print $2 }')
@@ -352,7 +343,7 @@ function install_prerequisites() {
 
   # Install requirements
   echo "Installing required dependencies"
-  apt install -qq -y apt-transport-https apt-utils build-essential curl dnsutils git gcc net-tools software-properties-common unzip zip
+  apt install -qq -y apt-transport-https apt-utils build-essential curl dnsutils git gcc net-tools software-properties-common sqlite3 unzip zip
 }
 
 # Install SQLite v3 latest
@@ -571,7 +562,7 @@ http {
   git checkout "${V_GIT_BRANCH}"
   composer install --no-dev
   cp .env.prod .env
-  sed -i "s/APP_URL=/APP_URL=${V_APP_URL}/g" .env
+  sed -i "s/APP_URL=/APP_URL=${V_CUSTOM_DOMAIN}/g" .env
   V_ENV_CONFIG="
 REDIS_CLIENT=phpredis
 REDIS_HOST=127.0.0.1
@@ -597,36 +588,31 @@ QUEUE_CONNECTION=redis #default
 
   # optimize
   php artisan optimize
+  php artisan icons:cache
   php artisan filament:optimize
+  php artisan filament:cache-components
 
   # Setup custom domain + SSL
   if [[ "${V_APP_ENV}" == prod* && $(validate_domain_name "${V_CUSTOM_DOMAIN}") == true ]]; then
     sed -i "s/server_name\ _/server_name\ ${V_CUSTOM_DOMAIN}/g" /etc/nginx/sites-available/vito
 
-    # Setup http/2 SSL
     if [[ "${V_USE_HTTPS_DOMAIN}" == y* || "${V_USE_HTTPS_DOMAIN}" == Y* ]]; then
       if [[ -n $(command -v certbot) ]]; then
-        # Create Let's Encrypt certificate
         certbot certonly --force-renewal --nginx --noninteractive --agree-tos \
           --cert-name "${V_CUSTOM_DOMAIN}" -m "${V_ADMIN_EMAIL}" -d "${V_CUSTOM_DOMAIN}" --verbose
-          
-        # Make vhost backup
+
         cp -f /etc/nginx/sites-available/vito /etc/nginx/sites-available/vito.nonssl
 
-        # Change listening port to 443
         if grep -qwE "^\    listen\ (\b[0-9]{1,3}\.){3}[0-9]{1,3}\b:80" /etc/nginx/sites-available/vito; then
           sed -i "s/\:80/\:443\ ssl/g" /etc/nginx/sites-available/vito
         fi
         sed -i "s/listen\ 80/listen\ 443\ ssl/g" /etc/nginx/sites-available/vito
         sed -i "s/listen\ \[::\]:80/listen\ \[::\]:443\ ssl/g" /etc/nginx/sites-available/vito
-
-        # Enable SSL directives
         sed -i "s/http2\ off/http2\ on/g" /etc/nginx/sites-available/vito
         sed -i "s/#ssl_certificate/ssl_certificate/g" /etc/nginx/sites-available/vito
         sed -i "s/#ssl_certificate_key/ssl_certificate_key/g" /etc/nginx/sites-available/vito
         sed -i "s/#ssl_trusted_certificate/ssl_trusted_certificate/g" /etc/nginx/sites-available/vito
 
-        # Append HTTP <=> HTTPS redirection block
         export V_HOST_CONFIG_HTTP_REDIRECT="## HTTP to HTTPS redirection.
 server {
   listen 80;
@@ -644,8 +630,6 @@ server {
       fi
     fi
   fi
-
-  # Reload Nginx config
   service nginx reload -s
 
   # Setup supervisor
@@ -686,7 +670,7 @@ function vitodeploy_print_info() {
   echo "✅ SSH Password: ${V_PASSWORD}"
   echo "✅ Admin Email: ${V_ADMIN_EMAIL}"
   echo "✅ Admin Password: ${V_ADMIN_PASSWORD}"
-  echo "🌏 Admin Login Page: ${V_APP_URL}/login"
+  echo "🌏 Admin Login Page: http://${V_CUSTOM_DOMAIN}/login"
 }
 
 # Handle termination signal
