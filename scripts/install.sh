@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+{ # this ensures the entire script is downloaded #
+
 export VITO_VERSION="2.x"
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
@@ -680,29 +682,35 @@ function terminate_cleanup() {
   exit 0
 }
 
-# Trap termination signal
-trap terminate_cleanup SIGTSTP
-trap terminate_cleanup SIGINT
+function vitodeploy_do_install() {
+  # Trap termination signal
+  trap terminate_cleanup SIGTSTP
+  trap terminate_cleanup SIGINT
 
-# Start VitoDeploy installation
-vitodeploy_header
-check_root_access "$@"
-check_supported_os
-echo "Starting VitoDeploy installation..."
-echo -e "Please ensure that you're on a fresh Ubuntu install!\n"
-if [[ "${NONINTERACTIVE}" != y* && "${NONINTERACTIVE}" != Y* ]]; then
-  read -t 600 -rp "Press [Enter] to continue or [Ctrl+C] to cancel..." </dev/tty
-else
-  sleep 2 & 
-  wait # wait for termination signal (ctrl+z / ctrl+c)
-fi
-vitodeploy_header
-echo -e "Please, enter required information below!\n"
-export V_INPUT_RETRY=0
-until vitodeploy_input; 
-do
-  ((V_INPUT_RETRY++))
-done
-vitodeploy_install "$@"
-vitodeploy_header
-vitodeploy_print_info
+  # Start VitoDeploy installation
+  vitodeploy_header
+  check_root_access "$@"
+  check_supported_os
+  echo "Starting VitoDeploy installation..."
+  echo -e "Please ensure that you're on a fresh Ubuntu install!\n"
+  if [[ "${NONINTERACTIVE}" != y* && "${NONINTERACTIVE}" != Y* ]]; then
+    read -t 600 -rp "Press [Enter] to continue or [Ctrl+C] to cancel..." </dev/tty
+  else
+    sleep 2 & 
+    wait # wait for termination signal (ctrl+z / ctrl+c)
+  fi
+  vitodeploy_header
+  echo -e "Please, enter required information below!\n"
+  export V_INPUT_RETRY=0
+  until vitodeploy_input; 
+  do
+    ((V_INPUT_RETRY++))
+  done
+  vitodeploy_install
+  vitodeploy_header
+  vitodeploy_print_info
+}
+
+vitodeploy_do_install "$@"
+
+} # this ensures the entire script is downloaded #
