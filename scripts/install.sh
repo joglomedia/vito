@@ -378,10 +378,8 @@ function install_sqlite3_from_source() {
 function vitodeploy_install() {
   echo -e "\nInstalling VitoDeploy, please sit tight..."
 
-  install_prerequisites
-
   # Create system user account
-  echo "Creating system user account for '${V_USERNAME}'"
+  echo -e "\nCreating system user account for '${V_USERNAME}'"
   if [[ -z $(getent passwd "${V_USERNAME}") ]]; then
     HASHED_PASSWORD=$(openssl passwd -1 "${V_PASSWORD}")
     useradd -p "${HASHED_PASSWORD}" "${V_USERNAME}" && \
@@ -396,7 +394,10 @@ function vitodeploy_install() {
     echo "User '${V_USERNAME}' created and added to sudo"
   else
     echo "System user account '${V_USERNAME}' already exists"
+    exit 1
   fi
+
+  install_prerequisites
 
   # Python (required to install Certbot)
   echo "Installing Python (required for Certbot)"
