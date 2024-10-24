@@ -2,12 +2,6 @@
 
 { # this ensures the entire script is downloaded #
 
-export VITO_VERSION="2.x"
-export DEBIAN_FRONTEND=noninteractive
-export NEEDRESTART_MODE=a
-export OS_DISTRIB_NAME && OS_DISTRIB_NAME=$(lsb_release -is)
-export OS_RELEASE_NAME && OS_RELEASE_NAME=$(lsb_release -cs)
-
 # VitoDeploy header banner
 function vitodeploy_header() {
   clear
@@ -153,6 +147,18 @@ function vitodeploy_input() {
   return 0
 }
 
+# Make sure only root or sudo user can run this script
+function check_root_access() {
+  if [[ "$(id -u)" -ne 0 ]]; then
+    echo "This installer script must be run as root or with a sudo user."
+    if [[ $(groups "$(id -un)" | grep -c sudo) -ne 0 ]]; then
+      echo -e "\nFor a sudo user, you can run the following command:"
+      echo "curl -sLO https://raw.githubusercontent.com/vitodeploy/vito/${VITO_VERSION}/scripts/install.sh && sudo ./install.sh"
+    fi
+    exit 1
+  fi
+}
+
 # Check for supported OS
 function check_supported_os() {
   OS_DISTRIB_NAME=${OS_DISTRIB_NAME:-$(lsb_release -is)}
@@ -180,19 +186,6 @@ function check_supported_os() {
     echo "If you'd like it to be, let us know!"
     echo "👉🏻 https://github.com/vitodeploy/vito/issues"
     exit 1
-  fi
-}
-
-# Make sure only root or sudo user can run this script
-function check_root_access() {
-  if [[ "$(id -u)" -ne 0 ]]; then
-    if [[ $(groups "$(id -un)" | grep -c sudo) -gt 0 ]]; then
-      sudo -EH "$0" "$@"
-      exit 0
-    else
-      echo "Installer script must be run as root or with sudo."
-      exit 1
-    fi
   fi
 }
 
@@ -482,7 +475,7 @@ http {
   sed -i "s/user\ =\ www-data/user\ =\ ${V_USERNAME}/g" "/etc/php/${V_PHP_VERSION}/fpm/pool.d/${V_USERNAME}.conf"
   sed -i "s/group\ =\ www-data/group\ =\ ${V_USERNAME}/g" "/etc/php/${V_PHP_VERSION}/fpm/pool.d/${V_USERNAME}.conf"
   sed -i "s/\[www\]/\[${V_USERNAME}\]/g" "/etc/php/${V_PHP_VERSION}/fpm/pool.d/${V_USERNAME}.conf"
-  sudo cp "/lib/systemd/system/php${V_PHP_VERSION}-fpm.service" "/lib/systemd/system/php${V_PHP_VERSION}-fpm.service.bak"
+  cp "/lib/systemd/system/php${V_PHP_VERSION}-fpm.service" "/lib/systemd/system/php${V_PHP_VERSION}-fpm.service.bak"
   systemctl enable "php${V_PHP_VERSION}-fpm"
   systemctl start "php${V_PHP_VERSION}-fpm"
 
@@ -675,19 +668,31 @@ function vitodeploy_print_info() {
   echo "🌏 Admin Login Page: http://${V_CUSTOM_DOMAIN}/login"
 }
 
+# Reset functions
+function vitodeploy_reset() {
+  unset -f vitodeploy_header check_root_access check_supported_os vitodeploy_input vitodeploy_install vitodeploy_print_info \
+    vitodeploy_do_install terminate_cleanup vitodeploy_reset get_ip_private get_ip_prublic get_ipv6_private get_ipv6_prublic \
+    validate_domain_name validate_email_address get_ram_size create_swap install_prerequisites install_sqlite3_from_source
+}
+
 # Handle termination signal
-function terminate_cleanup() {
+function vitodeploy_terminate_cleanup() {
   echo ""
   kill -term $$
   exit 0
 }
 
 function vitodeploy_do_install() {
-  # Trap termination signal
-  trap terminate_cleanup SIGTSTP
-  trap terminate_cleanup SIGINT
+  export VITO_VERSION="2.x"
+  export DEBIAN_FRONTEND=noninteractive
+  export NEEDRESTART_MODE=a
+  export OS_DISTRIB_NAME && OS_DISTRIB_NAME=$(lsb_release -is)
+  export OS_RELEASE_NAME && OS_RELEASE_NAME=$(lsb_release -cs)
 
-  # Start VitoDeploy installation
+  # Trap termination signal
+  trap vitodeploy_terminate_cleanup SIGTSTP
+  trap vitodeploy_terminate_cleanup SIGINT
+
   vitodeploy_header
   check_root_access "$@"
   check_supported_os
@@ -702,15 +707,17 @@ function vitodeploy_do_install() {
   vitodeploy_header
   echo -e "Please, enter required information below!\n"
   export V_INPUT_RETRY=0
-  until vitodeploy_input; 
+  until vitodeploy_input
   do
     ((V_INPUT_RETRY++))
   done
   vitodeploy_install
   vitodeploy_header
   vitodeploy_print_info
+  vitodeploy_reset
 }
 
+# Start VitoDeploy installation
 vitodeploy_do_install "$@"
 
 } # this ensures the entire script is downloaded #

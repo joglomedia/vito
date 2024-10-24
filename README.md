@@ -13,8 +13,14 @@ Vito is a self-hosted web application that helps you manage your servers and dep
 
 ## Quick Start
 
+Install using the root user:
 ```sh
-bash <(curl -Ls https://raw.githubusercontent.com/vitodeploy/vito/2.x/scripts/install.sh)
+curl -sSLo- https://raw.githubusercontent.com/vitodeploy/vito/2.x/scripts/install.sh | bash
+```
+
+Install with a sudo user:
+```sh
+curl -sLO https://raw.githubusercontent.com/vitodeploy/vito/2.x/scripts/install.sh && sudo ./install.sh
 ```
 
 ## Features
