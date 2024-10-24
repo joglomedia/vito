@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-{ # this ensures the entire script is downloaded #
+{ # This ensures the entire script is downloaded #
 
 # VitoDeploy header banner
 function vitodeploy_header() {
@@ -44,8 +44,7 @@ function vitodeploy_header() {
   done
 
   # End color
-  echo -e -n "\e[0m"
-  echo ""
+  echo -e -n "\e[0m\n"
 
   # Restore default IFS
   IFS=${_IFS}
@@ -85,6 +84,7 @@ function vitodeploy_input() {
 
   export V_USE_CUSTOM_DOMAIN
   export V_CUSTOM_DOMAIN
+  export V_APP_URL
 
   if [[ "${V_APP_ENV}" == prod* ]]; then
     while [[ "${V_USE_CUSTOM_DOMAIN}" != y* && "${V_USE_CUSTOM_DOMAIN}" != Y* && \
@@ -103,8 +103,15 @@ function vitodeploy_input() {
       do
         read -rp "Do you wish to enable HTTPS for your domain? [y/n]: " -e V_USE_HTTPS_DOMAIN
       done
+
+      if [[ "${V_USE_HTTPS_DOMAIN}" == y* || "${V_USE_HTTPS_DOMAIN}" == Y* ]]; then
+        V_APP_URL="https://${V_CUSTOM_DOMAIN}"
+      else
+        V_APP_URL="http://${V_CUSTOM_DOMAIN}"
+      fi
     else
       V_CUSTOM_DOMAIN="${V_SERVER_IP_PUBLIC}"
+      V_APP_URL="http://${V_CUSTOM_DOMAIN}"
     fi
 
     if [[ $(validate_domain_name "${V_CUSTOM_DOMAIN}") == true ]]; then
@@ -128,7 +135,7 @@ function vitodeploy_input() {
           read -t 600 -rp "Press [Enter] to retry or [Ctrl+C] to cancel..." </dev/tty
         else
           sleep 3 &
-          wait # wait for termination signal (ctrl+z / ctrl+c)
+          wait # Wait for termination signal (ctrl+z / ctrl+c)
         fi
 
         # Retry checking DNS record (max. 10x retries)
@@ -553,11 +560,16 @@ http {
   find "/home/${V_USERNAME}/vito" -type f -exec chmod 644 {} \;
   cd "/home/${V_USERNAME}/vito" && git config core.fileMode false
   cd "/home/${V_USERNAME}/vito" || exit 1
-  V_GIT_BRANCH=$(git tag -l --merged "${VITO_VERSION}" --sort=-v:refname | head -n 1)
+  # Check for the latest release tag
+  if [[ $(git tag -l --sort=-v:refname | head -n 1 | awk -F '.' '{print $1}') -eq $(echo "${VITO_VERSION}" | awk -F '.' '{print $1}') ]]; then 
+    V_GIT_BRANCH=$(git tag -l --merged "${VITO_VERSION}" --sort=-v:refname | head -n 1)
+  else 
+    V_GIT_BRANCH="${VITO_VERSION}" # If not available, fallback to the version branch
+  fi
   git checkout "${V_GIT_BRANCH}"
   composer install --no-dev
   cp .env.prod .env
-  sed -i "s/APP_URL=/APP_URL=${V_CUSTOM_DOMAIN}/g" .env
+  sed -i "s|APP_URL=|APP_URL=${V_APP_URL}|g" .env
   V_ENV_CONFIG="
 REDIS_CLIENT=phpredis
 REDIS_HOST=127.0.0.1
@@ -665,7 +677,7 @@ function vitodeploy_print_info() {
   echo "✅ SSH Password: ${V_PASSWORD}"
   echo "✅ Admin Email: ${V_ADMIN_EMAIL}"
   echo "✅ Admin Password: ${V_ADMIN_PASSWORD}"
-  echo "🌏 Admin Login Page: http://${V_CUSTOM_DOMAIN}/login"
+  echo "🌏 Admin Login Page: ${V_APP_URL}/login"
 }
 
 # Reset functions
@@ -702,7 +714,7 @@ function vitodeploy_do_install() {
     read -t 600 -rp "Press [Enter] to continue or [Ctrl+C] to cancel..." </dev/tty
   else
     sleep 2 & 
-    wait # wait for termination signal (ctrl+z / ctrl+c)
+    wait # Wait for termination signal (ctrl+z / ctrl+c)
   fi
   vitodeploy_header
   echo -e "Please, enter required information below!\n"
@@ -720,4 +732,4 @@ function vitodeploy_do_install() {
 # Start VitoDeploy installation
 vitodeploy_do_install "$@"
 
-} # this ensures the entire script is downloaded #
+} # This ensures the entire script is downloaded #
