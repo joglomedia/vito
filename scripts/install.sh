@@ -160,7 +160,7 @@ function check_root_access() {
     echo "This installer script must be run as root or with a sudo user."
     if [[ $(groups "$(id -un)" | grep -c sudo) -ne 0 ]]; then
       echo -e "\nFor a sudo user, you can run the following command:"
-      echo "curl -sLO https://raw.githubusercontent.com/vitodeploy/vito/${VITO_VERSION}/scripts/install.sh && sudo ./install.sh"
+      echo "curl -sLO https://raw.githubusercontent.com/vitodeploy/vito/${VITO_VERSION}/scripts/install.sh && sudo bash ./install.sh"
     fi
     exit 1
   fi
